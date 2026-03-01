@@ -292,7 +292,7 @@ public final class Viewer
   }
 
   /**
-   * Clears the tags for the specified entity. The tags will be removed and cannot be shown again without re-adding the entity with {@link #addEntity(int, Vec)}
+   * Clears the tags for the specified entity. The tags will be removed without caching them
    * @param entityId entity ID
    */
   public void clearEntityTags(int entityId)
