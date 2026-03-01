@@ -15,12 +15,6 @@ public final class StatusNametagRenderer extends NametagRenderer
   }
 
   @Override
-  public void initialize(NametaggerPlatform platform, Viewer viewer, AttachedTagList tags)
-  {
-    // nothing to initialize for this renderer, since we will create the health tag in the render method
-  }
-
-  @Override
   public void render(NametaggerPlatform platform, Viewer viewer, ViewMap viewMap)
   {
     viewMap.forEachEntry((entityId, tags) ->

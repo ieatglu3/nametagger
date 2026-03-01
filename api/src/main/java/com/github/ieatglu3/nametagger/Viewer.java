@@ -92,13 +92,12 @@ public final class Viewer
    */
   public void attachRenderer(NametagRenderer renderer)
   {
+    Objects.requireNonNull(renderer, "tagRenderer cannot be null");
     if (this.closed)
       return;
-    Objects.requireNonNull(renderer, "tagRenderer cannot be null");
     this.taskExecutor.submit((platform) ->
     {
-      for (final var tags : this.entities.values())
-        this.invokeRendererInitialization(platform, renderer, tags);
+      this.invokeRendererAttach(platform, renderer);
       this.renderers.add(renderer);
     });
   }
@@ -110,22 +109,71 @@ public final class Viewer
    */
   public void detachRenderer(NametagRenderer renderer)
   {
+    Objects.requireNonNull(renderer, "tagRenderer cannot be null");
     if (this.closed)
       return;
-    Objects.requireNonNull(renderer, "tagRenderer cannot be null");
-    this.renderers.remove(renderer);
+    this.taskExecutor.submit((platform) ->
+    {
+      this.invokeRendererDetach(platform, renderer);
+      this.renderers.remove(renderer);
+    });
   }
 
-  private void invokeRendererInitialization(NametaggerPlatform platform, NametagRenderer renderer, AttachedTagList tags)
+  private void invokeRendererAttach(NametaggerPlatform platform, NametagRenderer renderer)
   {
     try
     {
-      renderer.initialize(platform, this, tags);
+      renderer.attached(platform, this, this.entities);
     }
     catch (Exception e) {
       LOGGER.log(
         Level.SEVERE,
         String.format("Exception while initializing renderer '%s' for viewer '%s'", renderer.name(), this.name()),
+        e
+      );
+    }
+  }
+
+  private void invokeRendererDetach(NametaggerPlatform platform, NametagRenderer renderer)
+  {
+    try
+    {
+      renderer.detached(platform, this, this.entities);
+    }
+    catch (Exception e) {
+      LOGGER.log(
+        Level.SEVERE,
+        String.format("Exception while detaching renderer '%s' for viewer '%s'", renderer.name(), this.name()),
+        e
+      );
+    }
+  }
+
+  private void invokeRendererStartViewingEntity(NametaggerPlatform platform, NametagRenderer renderer, AttachedTagList tags)
+  {
+    try
+    {
+      renderer.startViewingEntity(platform, this, tags);
+    }
+    catch (Exception e) {
+      LOGGER.log(
+        Level.SEVERE,
+        String.format("Exception while invoking startViewingEntity for renderer '%s' and viewer '%s'", renderer.name(), this.name()),
+        e
+      );
+    }
+  }
+
+  private void invokeRendererStopViewingEntity(NametaggerPlatform platform, NametagRenderer renderer, AttachedTagList tags)
+  {
+    try
+    {
+      renderer.stopViewingEntity(platform, this, tags);
+    }
+    catch (Exception e) {
+      LOGGER.log(
+        Level.SEVERE,
+        String.format("Exception while invoking stopViewingEntity for renderer '%s' and viewer '%s'", renderer.name(), this.name()),
         e
       );
     }
@@ -207,6 +255,11 @@ public final class Viewer
     final var tags = this.entities.remove(entityId);
     if (tags != null)
       tags.clear();
+    this.taskExecutor.submit((platform) ->
+    {
+      for (final var renderer : this.renderers)
+        this.invokeRendererStopViewingEntity(platform, renderer, tags);
+    });
   }
 
   /**
@@ -296,7 +349,7 @@ public final class Viewer
     this.taskExecutor.submit((platform) ->
     {
       for (final var renderer : this.renderers)
-        this.invokeRendererInitialization(platform, renderer, tags);
+        this.invokeRendererStartViewingEntity(platform, renderer, tags);
     });
   }
 

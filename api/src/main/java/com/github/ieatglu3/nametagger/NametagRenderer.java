@@ -28,18 +28,42 @@ public abstract class NametagRenderer
   }
 
   /**
-   * Initializes the tag renderer for a new entity. Called when a new entity is added to the viewer's tag list
+   * Called when a viewer starts viewing an entity with this renderer
    *
    * @param viewer  The {@link Viewer} who is viewing the tags
-   * @param tags    The {@link AttachedTagList} containing the tags to be rendered for the viewing entity
+   * @param attachedTags    An {@link AttachedTagList} containing the tags currently attached to the entity for the viewer
    */
-  public abstract void initialize(NametaggerPlatform platform, Viewer viewer, AttachedTagList tags);
+  public void startViewingEntity(NametaggerPlatform platform, Viewer viewer, AttachedTagList attachedTags) {}
+
+  /**
+   * Called when a viewer stops viewing an entity with this renderer
+   *
+   * @param viewer  The {@link Viewer} who is viewing the tags
+   * @param attachedTags    An {@link AttachedTagList} containing the tags that were attached to the entity for the viewer before they stopped viewing it
+   */
+  public void stopViewingEntity(NametaggerPlatform platform, Viewer viewer, AttachedTagList attachedTags) {}
+
+  /**
+   * Called when this renderer is attached to a viewer
+   *
+   * @param viewer  The {@link Viewer} who is viewing the tags
+   * @param viewMap    A {@link ViewMap} containing the tags to be rendered for all entities visible to the viewer
+   */
+  public void attached(NametaggerPlatform platform, Viewer viewer, ViewMap viewMap) {}
+
+  /**
+   * Called when this renderer is detached from a viewer
+   *
+   * @param viewer  The {@link Viewer} who is viewing the tags
+   * @param viewMap    A {@link ViewMap} containing the tags to be rendered for all entities visible to the viewer
+   */
+  public void detached(NametaggerPlatform platform, Viewer viewer, ViewMap viewMap) {}
 
   /**
    * Renders the tags for the source entity. Called every tick to update the tags
    *
    * @param viewer  The {@link Viewer} who is viewing the tags
-   * @param viewMap    A map of entity IDs to their corresponding {@link AttachedTagList}s. The source entity's tag list can be accessed using the source entity's ID
+   * @param viewMap    A {@link ViewMap} containing the tags to be rendered for all entities visible to the viewer
    */
   public abstract void render(NametaggerPlatform platform, Viewer viewer, ViewMap viewMap);
 }
