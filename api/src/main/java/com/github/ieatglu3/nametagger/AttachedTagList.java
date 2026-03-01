@@ -277,9 +277,9 @@ public final class AttachedTagList
     }
   }
 
-  void clear()
+  void removeAll()
   {
-    this.tags.clear();
-    this.tagsByUuid.clear();
+    for (final var tag : this.tags)
+      tag.markedForRemoval = true;
   }
 }

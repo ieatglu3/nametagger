@@ -226,7 +226,6 @@ public final class Viewer
     for (final var tags : this.entities.values())
     {
       this.hideEntityTags(tags.parentEntityId);
-      tags.clear();
       this.initTagList(tags);
     }
   }
@@ -241,7 +240,6 @@ public final class Viewer
     if (tags == null)
       return;
     this.hideEntityTags(entityId);
-    tags.clear();
     this.initTagList(tags);
   }
 
@@ -253,8 +251,6 @@ public final class Viewer
   {
     this.hideEntityTags(entityId);
     final var tags = this.entities.remove(entityId);
-    if (tags != null)
-      tags.clear();
     this.taskExecutor.submit((platform) ->
     {
       for (final var renderer : this.renderers)
@@ -293,6 +289,18 @@ public final class Viewer
     if (tags == null)
       return;
     tags.hide(this);
+  }
+
+  /**
+   * Clears the tags for the specified entity. The tags will be removed and cannot be shown again without re-adding the entity with {@link #addEntity(int, Vec)}
+   * @param entityId entity ID
+   */
+  public void clearEntityTags(int entityId)
+  {
+    final var tags = this.getTaggedEntity(entityId);
+    if (tags == null)
+      return;
+    tags.removeAll();
   }
 
   /**
