@@ -1,4 +1,4 @@
-package com.github.ieatglu3.nametagger.example_spigot;
+package com.github.ieatglu3.nametagger.example.spigot;
 
 import com.github.ieatglu3.nametagger.NametaggerPlatform;
 import com.github.ieatglu3.nametagger.platformutil.NametaggerPlatformUtil;
@@ -9,7 +9,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.UUID;
 
-public final class StatusNametags extends JavaPlugin implements Listener
+public class StatusNametags extends JavaPlugin implements Listener
 {
 
   // our nametag renderer

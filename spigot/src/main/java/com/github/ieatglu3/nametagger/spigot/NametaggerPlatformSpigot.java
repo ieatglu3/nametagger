@@ -2,8 +2,8 @@ package com.github.ieatglu3.nametagger.spigot;
 
 import com.github.ieatglu3.bukec.LazyEntityCache;
 import com.github.ieatglu3.nametagger.NametaggerPlatform;
+import com.github.ieatglu3.nametagger.NametaggerThreadFactory;
 import com.github.ieatglu3.nametagger.platformutil.NametaggerPlatformUtil;
-import com.github.ieatglu3.nametagger.platformutil.NametaggerThreadFactory;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -30,7 +30,7 @@ public final class NametaggerPlatformSpigot extends JavaPlugin implements Listen
 
     final var platform = NametaggerPlatform.builder()
       .unusedEntityIdProvider(NametaggerPlatformUtil.platformEntityIdProvider())
-      .executorService(Executors.newSingleThreadScheduledExecutor(NametaggerThreadFactory.create()))
+      .threadFactory(NametaggerThreadFactory.create())
       .entityGetter((entityPlatform, entityId) -> this.entityCache.get(entityId))
       .build();
 

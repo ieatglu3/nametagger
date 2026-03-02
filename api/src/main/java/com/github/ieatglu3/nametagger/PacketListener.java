@@ -26,7 +26,7 @@ final class PacketListener extends PacketListenerAbstract
     final var userId = user.getUUID();
     if (userId == null)
       return;
-    this.platform.disconnectViewer(userId);
+    this.platform.disconnectViewer(userId, false);
   }
 
   @Override
@@ -63,8 +63,8 @@ final class PacketListener extends PacketListenerAbstract
       final var packet = new WrapperPlayServerEntityMetadata(event);
       final var entityId = packet.getEntityId();
 
-      final var tagList = viewer.getTaggedEntity(entityId);
-      if (tagList == null)
+      final var taggedEntity = viewer.getTaggedEntity(entityId);
+      if (taggedEntity == null)
         return;
 
       final var bitsetData = TagEntity.findEntityDataByIndex(packet.getEntityMetadata(), 0, EntityDataTypes.BYTE);
@@ -76,15 +76,18 @@ final class PacketListener extends PacketListenerAbstract
       final var isInvisible = TagEntity.FlagBitmask.Invisibility.isSet(bitset);
       final var isSneaking = TagEntity.FlagBitmask.Sneaking.isSet(bitset);
 
-      for (final var tag : tagList.tags())
+      taggedEntity.sneaking = isSneaking;
+      taggedEntity.invisible = isInvisible;
+
+      for (final var tag : taggedEntity.tags())
       {
         final var shouldHideWhenInvisible = tag.hideWhenInvisible();
         final var shouldHideWhenSneaking = tag.hideWhenSneaking();
 
         if ((isInvisible && shouldHideWhenInvisible) || (isSneaking && shouldHideWhenSneaking))
-          tagList.hideTag(viewer, tag);
+          taggedEntity.hideTag(viewer, tag);
         else
-          tagList.showTag(viewer, tag);
+          taggedEntity.showTag(viewer, tag);
       }
     }
 
@@ -126,7 +129,7 @@ final class PacketListener extends PacketListenerAbstract
     else if (packetType == PacketType.Play.Server.JOIN_GAME) {
       final var packet = new WrapperPlayServerJoinGame(event);
       final var entityId = packet.getEntityId();
-      this.platform.createViewerPlayer(event.getUser(), entityId);
+      this.platform.startTrackingViewer(event.getUser(), entityId);
     }
 
     else if (packetType == PacketType.Play.Server.RESPAWN) {

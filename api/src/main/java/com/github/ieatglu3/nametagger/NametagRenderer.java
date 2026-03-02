@@ -31,17 +31,17 @@ public abstract class NametagRenderer
    * Called when a viewer starts viewing an entity with this renderer
    *
    * @param viewer  The {@link Viewer} who is viewing the tags
-   * @param attachedTags    An {@link AttachedTagList} containing the tags currently attached to the entity for the viewer
+   * @param taggedEntity    A {@link TaggedEntity} containing the tags currently attached to the entity for the viewer
    */
-  public void startViewingEntity(NametaggerPlatform platform, Viewer viewer, AttachedTagList attachedTags) {}
+  public void startViewingEntity(NametaggerPlatform platform, Viewer viewer, TaggedEntity taggedEntity) {}
 
   /**
    * Called when a viewer stops viewing an entity with this renderer
    *
    * @param viewer  The {@link Viewer} who is viewing the tags
-   * @param attachedTags    An {@link AttachedTagList} containing the tags that were attached to the entity for the viewer before they stopped viewing it
+   * @param taggedEntity    A {@link TaggedEntity} containing the tags that were attached to the entity for the viewer before they stopped viewing it
    */
-  public void stopViewingEntity(NametaggerPlatform platform, Viewer viewer, AttachedTagList attachedTags) {}
+  public void stopViewingEntity(NametaggerPlatform platform, Viewer viewer, TaggedEntity taggedEntity) {}
 
   /**
    * Called when this renderer is attached to a viewer

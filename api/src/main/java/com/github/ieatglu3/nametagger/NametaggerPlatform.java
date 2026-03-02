@@ -3,12 +3,11 @@ package com.github.ieatglu3.nametagger;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.protocol.player.User;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.time.Duration;
-import java.util.Collection;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -37,9 +36,10 @@ public class NametaggerPlatform
    * Default tick frequency is {@code 125ms} (8 ticks per second)
    */
   public static final class Builder {
+
     private UnusedEntityIdProvider unusedEntityIdProvider;
-    private EntityGetter<Object> entityGetter = EntityGetter.DEFAULT;
-    private ScheduledExecutorService executorService;
+    private EntityGetter<Object> entityGetter = EntityGetter.NOOP;
+    private ThreadFactory threadFactory = NametaggerThreadFactory.create();
     private Duration tickFrequency = Duration.ofMillis(125);
 
     /**
@@ -67,13 +67,15 @@ public class NametaggerPlatform
     }
 
     /**
-     * Sets the {@link ScheduledExecutorService} to use for this platform
-     * @param executorService executor service
+     * Sets the thread factory to use for the platform's executor service
+     * <br><br>
+     * Default implementation creates daemon threads with the name "NametaggerPlatform-Thread-%d"
+     * @param threadFactory thread factory
      * @return this builder
      */
-    public Builder executorService(ScheduledExecutorService executorService)
+    public Builder threadFactory(ThreadFactory threadFactory)
     {
-      this.executorService = executorService;
+      this.threadFactory = threadFactory;
       return this;
     }
 
@@ -97,47 +99,23 @@ public class NametaggerPlatform
     {
       if (this.unusedEntityIdProvider == null)
         throw new IllegalStateException("UnusedEntityIdProvider must be set");
-      if (this.executorService == null)
-        throw new IllegalStateException("ExecutorService must be set");
-      return new NametaggerPlatform(this.executorService, this.unusedEntityIdProvider, this.entityGetter, this.tickFrequency);
+      if (this.threadFactory == null)
+        throw new IllegalStateException("Thread factory must be set");
+      if (this.tickFrequency.isNegative() || this.tickFrequency.isZero())
+        throw new IllegalStateException("Tick frequency must be positive");
+      if (this.entityGetter == null)
+        throw new IllegalStateException("Entity getter must be set");
+      return new NametaggerPlatform(this.threadFactory, this.unusedEntityIdProvider, this.entityGetter, this.tickFrequency);
     }
   }
 
-  /** Creates a new builder for the NametaggerPlatform
-   *
+  /**
+   * Creates a new builder for the NametaggerPlatform
    * @return builder
    */
   public static Builder builder()
   {
     return new Builder();
-  }
-
-  private static final class BiDirectionalPlayerCache {
-    private final ConcurrentHashMap<UUID, Integer> playerToEntityId = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<Integer, UUID> entityIdToPlayer = new ConcurrentHashMap<>();
-
-    public void put(UUID playerId, int entityId)
-    {
-      this.playerToEntityId.put(playerId, entityId);
-      this.entityIdToPlayer.put(entityId, playerId);
-    }
-
-    public UUID getPlayer(int entityId)
-    {
-      return this.entityIdToPlayer.get(entityId);
-    }
-
-    public int getEntityId(UUID playerId)
-    {
-      return this.playerToEntityId.get(playerId);
-    }
-
-    public void removeByPlayerId(UUID playerId)
-    {
-      Integer entityId = this.playerToEntityId.remove(playerId);
-      if (entityId != null)
-        this.entityIdToPlayer.remove(entityId);
-    }
   }
 
   private static final class InternalEventBus {
@@ -160,23 +138,10 @@ public class NametaggerPlatform
         listener.accept(platform, viewer);
     }
 
-    public void onViewerLeave(NametaggerPlatform platform, RemovedViewer viewer)
+    public void onViewerRemove(NametaggerPlatform platform, RemovedViewer viewer)
     {
       for (final var listener : this.viewerRemoveListeners)
         listener.accept(platform, viewer);
-    }
-
-  }
-
-  private static final VarHandle STATE;
-  static
-  {
-    try
-    {
-      STATE = MethodHandles.lookup().findVarHandle(NametaggerPlatform.class, "state", State.class);
-    }
-    catch (ReflectiveOperationException e) {
-      throw new ExceptionInInitializerError(e);
     }
   }
 
@@ -184,7 +149,8 @@ public class NametaggerPlatform
 
   private final ConcurrentHashMap<UUID, Viewer> viewers = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<Integer, Viewer> entityIdToViewer = new ConcurrentHashMap<>();
-  private final BiDirectionalPlayerCache biDirectionalPlayerCache = new BiDirectionalPlayerCache();
+
+  private final ReentrantReadWriteLock stopLock = new ReentrantReadWriteLock();
 
   private volatile PacketListener packetListener;
   private volatile State state = State.Idle;
@@ -193,26 +159,42 @@ public class NametaggerPlatform
   private final EntityGetter<Object> entityGetter;
   private final ScheduledExecutorService executorService;
 
-  private final TaskExecutor<NametaggerPlatform> taskExecutor = new TaskExecutor<>();
+  private final ConcurrentTaskExecutor<NametaggerPlatform> taskExecutor = new ConcurrentTaskExecutor<>();
   private final InternalEventBus internalEventBus = new InternalEventBus();
   private final Duration tickFrequency;
+
+  private static final AtomicReferenceFieldUpdater<NametaggerPlatform, State> STATE =
+    AtomicReferenceFieldUpdater.newUpdater(NametaggerPlatform.class, State.class, "state");
+
   NametaggerPlatform(
-    ScheduledExecutorService executorService,
+    ThreadFactory threadFactory,
     UnusedEntityIdProvider unusedEntityIdProvider,
     EntityGetter<Object> entityGetter,
     Duration tickFrequency
   )
   {
-    this.executorService = executorService;
+    this.executorService = Executors.newSingleThreadScheduledExecutor(threadFactory);
     this.unusedEntityIdProvider = unusedEntityIdProvider;
     this.entityGetter = entityGetter;
     this.tickFrequency = tickFrequency;
     this.packetListener = new PacketListener(this);
     PacketEvents.getAPI().getEventManager().registerListener(this.packetListener);
+
+    if (!this.hasEntityGetter())
+      LOGGER.warning("using no-op entity getter; getEntity() will always return null");
   }
 
   /**
-   * Gets the {@link ScheduledExecutorService} used by this platform for ticking
+   * Checks if this platform has an entity getter function provided
+   * @return has entity getter
+   */
+  public boolean hasEntityGetter()
+  {
+    return this.entityGetter != EntityGetter.NOOP;
+  }
+
+  /**
+   * Gets the single-threaded {@link ScheduledExecutorService} used by this platform
    * @return executor service
    */
   public ScheduledExecutorService executorService()
@@ -223,7 +205,7 @@ public class NametaggerPlatform
   /**
    * Registers a listener to be called when a new player is created, which is when the platform starts tracking them
    * <br><br>
-   * The listener will be executed on the next tick after the player is created
+   * The listener is invoked on the network thread immediately after the player is created
    * @param listener listener to register
    */
   public void listenForViewerJoin(BiConsumer<NametaggerPlatform, Viewer> listener)
@@ -234,7 +216,7 @@ public class NametaggerPlatform
   /**
    * Registers a listener to be called when a player is removed, which is when the platform stops tracking them
    * <br><br>
-   * The listener will be executed on the next tick after the player is removed
+   * The listener is invoked on the next tick after the player is removed; the player is already closed at that point
    * @param listener listener to register
    */
   public void listenForViewerRemove(BiConsumer<NametaggerPlatform, RemovedViewer> listener)
@@ -246,8 +228,6 @@ public class NametaggerPlatform
    * Gets the entity object for the given entity ID, using the entity getter function provided in the builder
    * <br><br>
    * Implementations are guaranteed to provide thread safe access to getting the entity, but not the entity object itself.
-   * <br><br>
-   * Implementations will lazily or instantly remove entities that are no longer valid. If lazy, the returned entity may not be valid by the time it is used.
    * @param entityId entity ID
    * @return entity object, or null if no entity was found
    */
@@ -318,34 +298,44 @@ public class NametaggerPlatform
 
   /**
    * Shuts down the platform, which will stop ticking players and unregister packet listeners
+   * May block if viewers are still being added or removed
    */
   public void shutdown()
   {
     if (!STATE.compareAndSet(this, State.Running, State.ShuttingDown))
       throw new IllegalStateException("Platform can only be shutdown from the Running state");
 
-    if (this.packetListener != null)
-    {
-      PacketEvents.getAPI().getEventManager().unregisterListener(this.packetListener);
-      this.packetListener = null;
-    }
-
-    this.executorService.shutdownNow();
+    this.stopLock.writeLock().lock();
     try
     {
-      if (!this.executorService.awaitTermination(5, TimeUnit.SECONDS))
-        LOGGER.warning("Executor service did not shut down within the timeout");
-    }
-    catch (InterruptedException e) {
-      LOGGER.warning("Interrupted while waiting for executor service to shut down");
-    }
 
-    for (final var player : this.viewers.values())
-      player.close();
+      if (this.packetListener != null)
+      {
+        PacketEvents.getAPI().getEventManager().unregisterListener(this.packetListener);
+        this.packetListener = null;
+      }
 
-    this.viewers.clear();
-    this.entityIdToViewer.clear();
-    this.state = State.Shutdown;
+      for (final UUID uuid : this.viewers.keySet())
+        this.disconnectViewer(uuid, true);
+
+      this.taskExecutor.executeAll(this);
+      this.taskExecutor.shutdown();
+
+      this.executorService.shutdown();
+      try
+      {
+        if (!this.executorService.awaitTermination(5, TimeUnit.SECONDS))
+          LOGGER.warning("Executor service did not shut down within the timeout");
+      }
+      catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        LOGGER.warning("Interrupted while waiting for executor service to shut down");
+      }
+    }
+    finally {
+      this.state = State.Shutdown;
+      this.stopLock.writeLock().unlock();
+    }
   }
 
   /**
@@ -369,39 +359,27 @@ public class NametaggerPlatform
   }
 
   /**
-   * Gets the player by their entity ID, using a mapper function to map from the player's UUID to the desired type
+   * Gets the viewer by their entity ID, and maps it to another object using the provided mapping function
    * @param entityId the entity ID
    * @param mapper the mapping function
-   * @return mapped player, or null
+   * @return mapped object, or null if no viewer was found or the viewer has no UUID
    */
-  public <T> T getPlayerByEntityId(int entityId, Function<UUID, T> mapper)
+  public <T> T mapViewerByEntityId(int entityId, Function<Viewer, T> mapper)
   {
-    final var playerId = this.biDirectionalPlayerCache.getPlayer(entityId);
-    if (playerId == null)
+    final var viewer = this.entityIdToViewer.get(entityId);
+    if (viewer == null)
       return null;
-    return mapper.apply(playerId);
+    return mapper.apply(viewer);
   }
 
   /**
-   * Closes the viewer with the given UUID, removing them from the platform
+   * Closes the viewer forcibly with the given UUID, removing them from the platform
    * @param uuid the UUID of the viewer to close
-   * @return a future that will complete on next tick with the closed viewer, or null if no viewer with the given UUID was found
+   * @return future that completes with null if the platform was shut or shutting down, or if no viewer with the given UUID was found
    */
   public CompletableFuture<Viewer> closeViewer(UUID uuid)
   {
-    final var future = new CompletableFuture<Viewer>();
-    this.executeNextTick((platform) ->
-    {
-      final var viewer = platform.viewers.remove(uuid);
-      if (viewer != null)
-      {
-        viewer.close();
-        platform.entityIdToViewer.remove(viewer.entityId);
-        platform.internalEventBus.onViewerLeave(platform, new RemovedViewer(uuid, viewer.entityId));
-      }
-      future.complete(viewer);
-    });
-    return future;
+    return this.disconnectViewer(uuid, true);
   }
 
   /**
@@ -420,37 +398,68 @@ public class NametaggerPlatform
       player.tick(this);
   }
 
-  Viewer createViewerPlayer(User user, int entityId)
+  void startTrackingViewer(User user, int entityId)
   {
     final var uuid = user.getUUID();
     if (uuid == null)
       throw new IllegalArgumentException("User must have a UUID");
 
-    if (this.viewers.containsKey(uuid))
-      return this.viewers.get(uuid);
+    if (this.isShutOrShuttingDown())
+      return;
+
+    final ReentrantReadWriteLock.ReadLock stopLock = this.stopLock.readLock();
+    if (!stopLock.tryLock())
+      return;
 
     final var viewer = new Viewer(user, entityId, this.unusedEntityIdProvider);
-    this.viewers.put(uuid, viewer);
-    this.entityIdToViewer.put(viewer.entityId, viewer);
-
-    this.biDirectionalPlayerCache.put(uuid, entityId);
-
-    this.executeNextTick(platform -> platform.internalEventBus.onViewerJoin(platform, viewer));
-    return viewer;
+    try
+    {
+      final Viewer oldViewer = this.viewers.put(uuid, viewer);
+      if (oldViewer != null) // todo; dont think this is very reliable but wtf am i really meant to do, this shouldn't happen
+      {
+        LOGGER.warning("Viewer with UUID " + uuid + " already exists, closing and replacing it");
+        this.executeNextTick(platform -> oldViewer.close(platform, true));
+        this.entityIdToViewer.remove(oldViewer.entityId);
+      }
+      this.entityIdToViewer.put(viewer.entityId, viewer);
+      this.internalEventBus.onViewerJoin(this, viewer);
+    }
+    finally {
+      stopLock.unlock();
+    }
   }
 
-  void disconnectViewer(UUID uuid)
+  CompletableFuture<Viewer> disconnectViewer(UUID uuid, boolean forcibly)
   {
-    this.executeNextTick(platform ->
+    final CompletableFuture<Viewer> future = new CompletableFuture<>();
+    final ReentrantReadWriteLock.ReadLock stopLock = this.stopLock.readLock();
+
+    if (!stopLock.tryLock())
     {
-      final var viewer = platform.viewers.remove(uuid);
+      future.complete(null);
+      return future;
+    }
+
+    try
+    {
+      final Viewer viewer = this.viewers.remove(uuid);
       if (viewer != null)
+        this.entityIdToViewer.remove(viewer.entityId);
+
+      this.executeNextTick(platform ->
       {
-        viewer.closeInternal();
-        platform.entityIdToViewer.remove(viewer.entityId);
-        platform.internalEventBus.onViewerLeave(platform, new RemovedViewer(uuid, viewer.entityId));
-      }
-      platform.biDirectionalPlayerCache.removeByPlayerId(uuid);
-    });
+        if (viewer != null)
+        {
+          viewer.close(platform, forcibly);
+          platform.internalEventBus.onViewerRemove(platform, new RemovedViewer(uuid, viewer.entityId));
+        }
+        future.complete(viewer);
+      });
+    }
+    finally {
+      stopLock.unlock();
+    }
+
+    return future;
   }
 }

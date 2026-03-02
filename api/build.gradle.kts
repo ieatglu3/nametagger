@@ -5,7 +5,7 @@ plugins {
 
 var projectGroup = "com.github.ieatglu3"
 var projectVersion = "1.0.0"
-var projectArtifactId = "nametagger"
+var jarName = "nametagger"
 
 group = projectGroup
 version = projectVersion
@@ -33,7 +33,7 @@ tasks {
     options.release = 10
   }
   jar {
-    archiveBaseName = projectArtifactId
+    archiveBaseName = jarName
     version = project.version
   }
   test {

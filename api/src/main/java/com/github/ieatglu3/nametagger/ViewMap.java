@@ -4,13 +4,13 @@ import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 
 // todo; replace with custom primitive impl
-public final class ViewMap extends ConcurrentHashMap<Integer, AttachedTagList>
+public final class ViewMap extends ConcurrentHashMap<Integer, TaggedEntity>
 {
 
   @FunctionalInterface
   public interface EntryConsumer
   {
-    void accept(int entityId, AttachedTagList tagList);
+    void accept(int entityId, TaggedEntity taggedEntity);
   }
 
   /**

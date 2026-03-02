@@ -6,12 +6,10 @@ import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
 import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.protocol.world.Location;
-import com.github.retrooper.packetevents.util.Vector3d;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnLivingEntity;
 import io.github.retrooper.packetevents.adventure.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.text.Component;
 

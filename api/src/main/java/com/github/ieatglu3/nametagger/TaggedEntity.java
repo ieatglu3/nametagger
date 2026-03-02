@@ -2,17 +2,19 @@ package com.github.ieatglu3.nametagger;
 
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.protocol.world.Location;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
 import net.kyori.adventure.text.Component;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 
 /**
  * Represents a list of tags that are attached to a parent entity
  */
-public final class AttachedTagList
+public final class TaggedEntity
 {
 
   final int parentEntityId;
@@ -26,12 +28,33 @@ public final class AttachedTagList
 
   private final ClientVersion clientVersion;
 
-  AttachedTagList(int parentEntityId, Vec parentPosition, UnusedEntityIdProvider unusedEntityIdProvider, ClientVersion clientVersion)
+  volatile boolean sneaking = false;
+  volatile boolean invisible = false;
+
+  TaggedEntity(int parentEntityId, Vec parentPosition, UnusedEntityIdProvider unusedEntityIdProvider, ClientVersion clientVersion)
   {
     this.parentEntityId = parentEntityId;
     this.parentPosition = new AtomicReference<>(parentPosition);
     this.unusedEntityIdProvider = unusedEntityIdProvider;
     this.clientVersion = clientVersion;
+  }
+
+  /**
+   * Returns whether the parent entity is sneaking
+   * @return sneaking
+   */
+  public boolean isSneaking()
+  {
+    return this.sneaking;
+  }
+
+  /**
+   * Returns whether the parent entity is invisible
+   * @return invisible
+   */
+  public boolean isInvisible()
+  {
+    return this.invisible;
   }
 
   /**
@@ -44,7 +67,7 @@ public final class AttachedTagList
   }
 
   /**
-   * Gets the entity ID of the parent entity of this tag list
+   * Gets the entity ID of the tracked parent entity
    * @return parent entity ID
    */
   public int entityId()
@@ -53,7 +76,7 @@ public final class AttachedTagList
   }
 
   /**
-   * Creates a new tag with the specified component and adds it to this tag list
+   * Creates a new tag with the specified component and adds it to the list of tags
    * @param component the component of the {@link ComponentTag}
    * @return the created {@link ComponentTag}
    */
@@ -63,7 +86,7 @@ public final class AttachedTagList
   }
 
   /**
-   * Gets or creates a tag at the specified index with the specified component, and adds it to this tag list.
+   * Gets or creates a tag at the specified index with the specified component, and adds it to the list of tags
    * If a tag already exists at the specified index, it will be returned
    * @param index index
    * @param component the component of the {@link ComponentTag}
@@ -75,7 +98,7 @@ public final class AttachedTagList
   }
 
   /**
-   * Gets or creates a tag at the specified index with the specified component and offset, and adds it to this tag list.
+   * Gets or creates a tag at the specified index with the specified component and offset, and adds it to the list of tags
    * If a tag already exists at the specified index, it will be returned
    * @param index index
    * @param component the component of the {@link ComponentTag}
@@ -84,14 +107,14 @@ public final class AttachedTagList
    */
   public ComponentTag getOrCreateComponentTag(int index, Component component, Vec offset)
   {
-    final var existingTag = this.getNullable(index);
+    final var existingTag = this.getOrNull(index);
     if (existingTag != null)
       return existingTag;
     return this.createComponentTag(component, offset);
   }
 
   /**
-   * Creates a new tag with the specified content and offset, and adds it to this tag list
+   * Creates a new tag with the specified content and offset, and adds it to the list of tags
    * @param component the component of the {@link ComponentTag}
    * @param offset the offset of the {@link ComponentTag} from the parent entity
    * @return the created {@link ComponentTag}
@@ -121,14 +144,14 @@ public final class AttachedTagList
    */
   public void remove(int index)
   {
-    final var tag = this.getNullable(index);
+    final var tag = this.getOrNull(index);
     if (tag != null)
       tag.markedForRemoval = true;
   }
 
   /**
    * Gets the position of the parent entity
-   * @return the position of the parent entity of this tag list
+   * @return the position of the tracked parent entity
    */
   public Vec parentPosition()
   {
@@ -161,7 +184,7 @@ public final class AttachedTagList
    * @param index index
    * @return tag at index, or null if index is out of bounds
    */
-  public ComponentTag getNullable(int index)
+  public ComponentTag getOrNull(int index)
   {
     if (index < 0 || index >= this.tags.size())
       return null;
@@ -181,7 +204,7 @@ public final class AttachedTagList
     if (!tag.compareAndSetShown(false, true))
       return;
     tag.entity.setFlag(TagEntity.FlagBitmask.Invisibility, true);
-    viewer.nextTick(tickingViewer -> { // in case viewer is closed concurrently
+    viewer.nextTick(tickingViewer -> {
       final var spawnPos = this.parentPosition().add(tag.offset);
       final var spawnLocation = new Location(spawnPos.toPacketEventsVector3d(), 0, 0);
       final var spawnPackets = tag.entity.spawnPackets(spawnLocation);
@@ -204,7 +227,7 @@ public final class AttachedTagList
       throw new IllegalArgumentException("Tag is not in this tag list");
     if (!tag.compareAndSetShown(true, false))
       return;
-    viewer.nextTick(tickingViewer -> { // in case viewer is closed concurrently
+    viewer.nextTick(tickingViewer -> {
       final var destroyPacket = TagEntity.destroyEntitiesPacket(tag.entityId());
       tickingViewer.sendPacket(destroyPacket);
     });
@@ -218,20 +241,28 @@ public final class AttachedTagList
 
   void hide(Viewer viewer)
   {
+    this.hide0(viewer, true, (v, packet) -> v.nextTick(tickingViewer -> tickingViewer.sendPacket(packet)));
+  }
+
+  void hideNow(Viewer viewer)
+  {
+    this.hide0(viewer, false, Viewer::sendPacket);
+  }
+
+  void hide0(Viewer viewer, boolean checkIfShown, BiConsumer<Viewer, WrapperPlayServerDestroyEntities> packetSendingConsumer)
+  {
     var removedEntities = new int[1];
     var removedEntitiesSize = 0;
     for (final var tag : this.tags)
     {
-      if (!tag.compareAndSetShown(true, false))
+      if (checkIfShown && !tag.compareAndSetShown(true, false))
         continue;
       removedEntities[removedEntitiesSize++] = tag.entityId();
       if (removedEntitiesSize >= removedEntities.length)
         removedEntities = Arrays.copyOf(removedEntities, removedEntitiesSize * 2);
     }
-
     final var removeArray = Arrays.copyOf(removedEntities, removedEntitiesSize);
-    // in case viewer is closed concurrently
-    viewer.nextTick(tickingViewer -> tickingViewer.sendPacket(TagEntity.destroyEntitiesPacket(removeArray)));
+    packetSendingConsumer.accept(viewer, TagEntity.destroyEntitiesPacket(removeArray));
   }
 
   void updatePosition(Viewer viewer, double x, double y, double z, PositionUpdateKind positionUpdateKind)
@@ -248,11 +279,8 @@ public final class AttachedTagList
     }
 
     for (final var tag : this.tags)
-    {
-      if (!tag.isVisible())
-        continue;
-      tag.updatePosition(viewer, x, y, z, positionUpdateKind);
-    }
+      if (tag.isVisible())
+        tag.updatePosition(viewer, x, y, z, positionUpdateKind);
   }
 
   void tick(Viewer viewer)
@@ -264,7 +292,8 @@ public final class AttachedTagList
       if (tag.markedForRemoval)
         removeQueue.add(tag);
       else
-        tag.tick(viewer);
+        if (tag.isVisible())
+          tag.tick(viewer);
     }
 
     for (final var tag : removeQueue)

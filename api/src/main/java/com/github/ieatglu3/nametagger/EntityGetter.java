@@ -7,7 +7,7 @@ package com.github.ieatglu3.nametagger;
 public interface EntityGetter<E>
 {
 
-  EntityGetter<Object> DEFAULT = (platform, entityId) -> null;
+  EntityGetter<Object> NOOP = (platform, entityId) -> null;
 
   /**
    * Gets an entity by its ID

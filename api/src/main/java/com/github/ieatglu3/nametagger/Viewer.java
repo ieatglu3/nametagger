@@ -12,7 +12,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * A player/client viewing tags
+ * A player/client viewing tagged entities
  */
 public final class Viewer
 {
@@ -22,11 +22,11 @@ public final class Viewer
   private final CopyOnWriteArrayList<NametagRenderer> renderers = new CopyOnWriteArrayList<>();
 
   private final ViewMap entities = new ViewMap();
-  private final ConcurrentHashMap<Integer, Integer> pendingTagEntities = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<Integer, Integer> tagEntities = new ConcurrentHashMap<>();
 
   final User user;
   final int entityId;
-  private final TaskExecutor<NametaggerPlatform> taskExecutor = new TaskExecutor<>();
+  private final ConcurrentBiTaskExecutor<NametaggerPlatform, Viewer> taskExecutor = new ConcurrentBiTaskExecutor<>();
 
   private final UnusedEntityIdProvider unusedEntityIdProvider;
 
@@ -93,12 +93,10 @@ public final class Viewer
   public void attachRenderer(NametagRenderer renderer)
   {
     Objects.requireNonNull(renderer, "tagRenderer cannot be null");
-    if (this.closed)
-      return;
-    this.taskExecutor.submit((platform) ->
+    this.taskExecutor.submit((platform, viewer) ->
     {
-      this.invokeRendererAttach(platform, renderer);
-      this.renderers.add(renderer);
+      viewer.invokeRendererAttach(platform, renderer);
+      viewer.renderers.add(renderer);
     });
   }
 
@@ -110,12 +108,10 @@ public final class Viewer
   public void detachRenderer(NametagRenderer renderer)
   {
     Objects.requireNonNull(renderer, "tagRenderer cannot be null");
-    if (this.closed)
-      return;
-    this.taskExecutor.submit((platform) ->
+    this.taskExecutor.submit((platform, viewer) ->
     {
-      this.invokeRendererDetach(platform, renderer);
-      this.renderers.remove(renderer);
+      viewer.invokeRendererDetach(platform, renderer);
+      viewer.renderers.remove(renderer);
     });
   }
 
@@ -149,11 +145,11 @@ public final class Viewer
     }
   }
 
-  private void invokeRendererStartViewingEntity(NametaggerPlatform platform, NametagRenderer renderer, AttachedTagList tags)
+  private void invokeRendererStartViewingEntity(NametaggerPlatform platform, NametagRenderer renderer, TaggedEntity taggedEntity)
   {
     try
     {
-      renderer.startViewingEntity(platform, this, tags);
+      renderer.startViewingEntity(platform, this, taggedEntity);
     }
     catch (Exception e) {
       LOGGER.log(
@@ -164,11 +160,11 @@ public final class Viewer
     }
   }
 
-  private void invokeRendererStopViewingEntity(NametaggerPlatform platform, NametagRenderer renderer, AttachedTagList tags)
+  private void invokeRendererStopViewingEntity(NametaggerPlatform platform, NametagRenderer renderer, TaggedEntity taggedEntity)
   {
     try
     {
-      renderer.stopViewingEntity(platform, this, tags);
+      renderer.stopViewingEntity(platform, this, taggedEntity);
     }
     catch (Exception e) {
       LOGGER.log(
@@ -190,10 +186,10 @@ public final class Viewer
   }
 
   /**
-   * Gets a collection of all the currently viewed tags for this viewer
-   * @return viewing tags
+   * Gets a collection of all the currently viewed {@link TaggedEntity}s for this viewer
+   * @return viewing entities
    */
-  public Collection<AttachedTagList> viewing()
+  public Collection<TaggedEntity> viewing()
   {
     return this.entities.values();
   }
@@ -213,7 +209,7 @@ public final class Viewer
    * @param entityId the entity ID to get the tag list for
    * @return the tag list for the specified entity ID, or null if the entity is not tagged
    */
-  public AttachedTagList getTaggedEntity(int entityId)
+  public TaggedEntity getTaggedEntity(int entityId)
   {
     return this.entities.get(entityId);
   }
@@ -223,10 +219,10 @@ public final class Viewer
    */
   public void refreshTags()
   {
-    for (final var tags : this.entities.values())
+    for (final var taggedEntity : this.entities.values())
     {
-      this.hideEntityTags(tags.parentEntityId);
-      this.initTagList(tags);
+      this.hideEntityTags(taggedEntity.parentEntityId);
+      this.initTagList(taggedEntity.parentEntityId);
     }
   }
 
@@ -236,11 +232,11 @@ public final class Viewer
    */
   public void refreshEntity(int entityId)
   {
-    final var tags = this.entities.get(entityId);
-    if (tags == null)
+    final var taggedEntity = this.entities.get(entityId);
+    if (taggedEntity == null)
       return;
     this.hideEntityTags(entityId);
-    this.initTagList(tags);
+    this.initTagList(entityId);
   }
 
   /**
@@ -250,11 +246,11 @@ public final class Viewer
   public void removeTaggedEntity(int entityId)
   {
     this.hideEntityTags(entityId);
-    final var tags = this.entities.remove(entityId);
-    this.taskExecutor.submit((platform) ->
+    final var taggedEntity = this.entities.remove(entityId);
+    this.taskExecutor.submit((platform, viewer) ->
     {
-      for (final var renderer : this.renderers)
-        this.invokeRendererStopViewingEntity(platform, renderer, tags);
+      for (final var renderer : viewer.renderers)
+        viewer.invokeRendererStopViewingEntity(platform, renderer, taggedEntity);
     });
   }
 
@@ -263,7 +259,7 @@ public final class Viewer
    */
   public void clearTaggedEntities()
   {
-    for (final var entityId : this.entities.keySet())
+    for (final var entityId : new ArrayList<>(this.entities.keySet()))
       this.removeTaggedEntity(entityId);
   }
 
@@ -273,10 +269,10 @@ public final class Viewer
    */
   public void showEntityTags(int entityId)
   {
-    final var tags = this.getTaggedEntity(entityId);
-    if (tags == null)
+    final var taggedEntity = this.getTaggedEntity(entityId);
+    if (taggedEntity == null)
       return;
-    tags.show(this);
+    taggedEntity.show(this);
   }
 
   /**
@@ -285,10 +281,10 @@ public final class Viewer
    */
   public void hideEntityTags(int entityId)
   {
-    final var tags = this.getTaggedEntity(entityId);
-    if (tags == null)
+    final var taggedEntity = this.getTaggedEntity(entityId);
+    if (taggedEntity == null)
       return;
-    tags.hide(this);
+    taggedEntity.hide(this);
   }
 
   /**
@@ -297,10 +293,10 @@ public final class Viewer
    */
   public void clearEntityTags(int entityId)
   {
-    final var tags = this.getTaggedEntity(entityId);
-    if (tags == null)
+    final var taggedEntity = this.getTaggedEntity(entityId);
+    if (taggedEntity == null)
       return;
-    tags.removeAll();
+    taggedEntity.removeAll();
   }
 
   /**
@@ -314,98 +310,114 @@ public final class Viewer
 
   boolean isTagEntity(int entityId)
   {
-    return this.pendingTagEntities.containsKey(entityId);
+    return this.tagEntities.containsKey(entityId);
   }
 
   void removeTagEntity(int entityId)
   {
-    this.pendingTagEntities.remove(entityId);
+    this.tagEntities.remove(entityId);
   }
 
   Integer getTagEntityParent(int entityId)
   {
-    return this.pendingTagEntities.get(entityId);
+    return this.tagEntities.get(entityId);
   }
 
   void addTagEntity(int entityId, int parent)
   {
-    this.pendingTagEntities.put(entityId, parent);
+    this.tagEntities.put(entityId, parent);
   }
 
   void addEntity(int entityId, Vec entityPosition)
   {
-    final var tags = new AttachedTagList(
+    final var taggedEntity = new TaggedEntity(
       entityId,
       entityPosition,
       this.unusedEntityIdProvider,
       this.clientVersion()
     );
-    if (this.entities.containsKey(entityId))
+    final var existingTaggedEntity = this.entities.put(entityId, taggedEntity);
+    this.taskExecutor.submit((platform, viewer) ->
     {
-      LOGGER.warning(String.format("Attempted to add entity '%d' to viewer '%s', but the entity is already tagged. Existing tags will be replaced.",
-        entityId,
-        this.name()
-      ));
-      this.hideEntityTags(entityId);
-    }
-    this.entities.put(entityId, tags);
-    this.initTagList(tags);
+      if (existingTaggedEntity != null) // should never happen
+      {
+        LOGGER.warning(String.format("Attempted to add entity '%d' to viewer '%s', but the entity is already tagged. Existing tags will be replaced.",
+          entityId,
+          this.name()
+        ));
+        existingTaggedEntity.hideNow(viewer);
+      }
+      viewer.initTagListNow(platform, entityId);
+    });
   }
 
-  void initTagList(AttachedTagList tags)
+  void initTagListNow(NametaggerPlatform platform, int entityId)
   {
-    this.taskExecutor.submit((platform) ->
-    {
-      for (final var renderer : this.renderers)
-        this.invokeRendererStartViewingEntity(platform, renderer, tags);
-    });
+    final var taggedEntity = this.entities.get(entityId);
+    if (taggedEntity == null)
+      return;
+    for (final var renderer : this.renderers)
+      this.invokeRendererStartViewingEntity(platform, renderer, taggedEntity);
+  }
+
+  void initTagList(int entityId)
+  {
+    this.taskExecutor.submit((platform, viewer) -> viewer.initTagListNow(platform, entityId));
   }
 
   void updateTagPositions(int source, double x, double y, double z, PositionUpdateKind positionUpdateKind)
   {
-    final var tags = this.entities.get(source);
-    if (tags == null)
+    final var taggedEntity = this.entities.get(source);
+    if (taggedEntity == null)
       return;
-    tags.updatePosition(this, x, y, z, positionUpdateKind);
+    taggedEntity.updatePosition(this, x, y, z, positionUpdateKind);
   }
 
   void nextTick(Consumer<Viewer> task)
   {
-    if (this.closed)
-      return;
-    this.taskExecutor.submit(platform -> task.accept(this));
+    this.taskExecutor.submit((platform, viewer) -> task.accept(viewer));
   }
 
+  // only call from platform thread
   void tick(NametaggerPlatform platform)
   {
-    this.taskExecutor.executeAll(platform);
+    this.taskExecutor.executeAll(platform, this);
     for (final var renderer : this.renderers)
     {
-      try {
+      try
+      {
         renderer.render(platform, this, this.entities);
       }
       catch (Exception e) {
-        LOGGER.log(
-          Level.SEVERE,
-          String.format("Exception while rendering tags for viewer '%s' with renderer '%s'", this.name(), renderer.name()),
-          e
-        );
+        LOGGER.log(Level.SEVERE, String.format("Exception while rendering entities for viewer '%s' with renderer '%s'", this.name(), renderer.name()), e);
       }
     }
-    for (final var tags : this.entities.values())
-      tags.tick(this);
+    for (final var taggedEntity : this.entities.values())
+      taggedEntity.tick(this);
   }
 
-  void closeInternal()
+  // only call from platform thread
+  void close(NametaggerPlatform platform, boolean forcibly)
   {
+    if (this.closed)
+      return;
     this.closed = true;
+    this.taskExecutor.executeAll(platform, this);
+    this.taskExecutor.shutdown();
+    this.detachAllRenderers(platform);
+    if (forcibly)
+    {
+      for (final var taggedEntity : List.copyOf(this.entities.values()))
+        taggedEntity.hideNow(this);
+      this.entities.clear();
+      this.tagEntities.clear();
+    }
   }
 
-  void close()
+  void detachAllRenderers(NametaggerPlatform platform)
   {
-    this.closed = true;
-    this.pendingTagEntities.clear();
-    for (final var tags : this.entities.values())
-      this.removeTaggedEntity(tags.parentEntityId);
+    for (final var renderer : this.renderers)
+      this.invokeRendererDetach(platform, renderer);
+    this.renderers.clear();
   }
 }
