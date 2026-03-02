@@ -1,6 +1,6 @@
 package com.github.ieatglu3.nametagger;
 
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -13,7 +13,7 @@ import java.util.logging.Logger;
 public final class ConcurrentBiTaskExecutor<A, B>
 {
   public static final Logger LOGGER = Logger.getLogger(ConcurrentBiTaskExecutor.class.getName());
-  private final ConcurrentLinkedDeque<BiConsumer<A, B>> tasks = new ConcurrentLinkedDeque<>();
+  private final ConcurrentLinkedQueue<BiConsumer<A, B>> tasks = new ConcurrentLinkedQueue<>();
 
   private volatile boolean shutdown = false;
 

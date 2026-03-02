@@ -1,6 +1,6 @@
 package com.github.ieatglu3.nametagger;
 
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -12,7 +12,7 @@ import java.util.logging.Logger;
 public final class ConcurrentTaskExecutor<T>
 {
   public static final Logger LOGGER = Logger.getLogger(ConcurrentTaskExecutor.class.getName());
-  private final ConcurrentLinkedDeque<Consumer<T>> tasks = new ConcurrentLinkedDeque<>();
+  private final ConcurrentLinkedQueue<Consumer<T>> tasks = new ConcurrentLinkedQueue<>();
 
   private volatile boolean shutdown = false;
 
