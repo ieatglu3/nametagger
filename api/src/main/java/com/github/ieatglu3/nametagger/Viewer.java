@@ -407,7 +407,7 @@ public final class Viewer
     this.detachAllRenderers(platform);
     if (forcibly)
     {
-      for (final var taggedEntity : List.copyOf(this.entities.values()))
+      for (final var taggedEntity : this.entities.values())
         taggedEntity.hideNow(this);
       this.entities.clear();
       this.tagEntities.clear();

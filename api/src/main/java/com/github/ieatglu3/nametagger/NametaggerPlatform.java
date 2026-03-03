@@ -315,7 +315,7 @@ public class NametaggerPlatform
         this.packetListener = null;
       }
 
-      for (final UUID uuid : this.viewers.keySet())
+      for (final UUID uuid : new ArrayList<>(this.viewers.keySet()))
         this.disconnectViewer(uuid, true);
 
       this.taskExecutor.executeAll(this);
@@ -404,11 +404,8 @@ public class NametaggerPlatform
     if (uuid == null)
       throw new IllegalArgumentException("User must have a UUID");
 
-    if (this.isShutOrShuttingDown())
-      return;
-
     final ReentrantReadWriteLock.ReadLock stopLock = this.stopLock.readLock();
-    if (!stopLock.tryLock())
+    if (this.isShutOrShuttingDown() || !stopLock.tryLock())
       return;
 
     final var viewer = new Viewer(user, entityId, this.unusedEntityIdProvider);
@@ -434,7 +431,7 @@ public class NametaggerPlatform
     final CompletableFuture<Viewer> future = new CompletableFuture<>();
     final ReentrantReadWriteLock.ReadLock stopLock = this.stopLock.readLock();
 
-    if (!stopLock.tryLock())
+    if (this.isShutOrShuttingDown() || !stopLock.tryLock())
     {
       future.complete(null);
       return future;
