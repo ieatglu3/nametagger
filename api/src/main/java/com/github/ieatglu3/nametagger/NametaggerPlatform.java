@@ -31,7 +31,7 @@ public class NametaggerPlatform
   }
 
   /**
-   * Platform builder for defining implementation specific settings such as the {@link UnusedEntityIdProvider}, {@link ScheduledExecutorService} and tick frequency
+   * Platform builder for defining implementation specific settings like the {@link UnusedEntityIdProvider}, {@link ThreadFactory} and tick frequency
    * <br><br>
    * Default tick frequency is {@code 125ms} (8 ticks per second)
    */
@@ -69,7 +69,7 @@ public class NametaggerPlatform
     /**
      * Sets the thread factory to use for the platform's executor service
      * <br><br>
-     * Default implementation creates daemon threads with the name "NametaggerPlatform-Thread-%d"
+     * Default thread factory is provided by {@link NametaggerThreadFactory#create()}
      * @param threadFactory thread factory
      * @return this builder
      */
@@ -80,8 +80,8 @@ public class NametaggerPlatform
     }
 
     /**
-     * Sets the tick frequency for this platform, this is how often the platform will tick players and execute tasks scheduled with {@link #executeNextTick(Consumer)}.
-     * Default is 125ms (10 ticks per second).
+     * Sets the tick frequency for this platform
+     * Default is 125ms (8 ticks per second)
      * @param tickFrequency tick frequency
      * @return this builder
      */
@@ -93,16 +93,18 @@ public class NametaggerPlatform
 
     /**
      * Builds the NametaggerPlatform with the provided settings
+     * <br><br>
+     * @throws IllegalStateException if either the unused entity ID provider, thread factory, or entity getter is not set, or if the tick frequency is less than or equal to 0
      * @return built NametaggerPlatform
      */
     public NametaggerPlatform build()
     {
       if (this.unusedEntityIdProvider == null)
-        throw new IllegalStateException("UnusedEntityIdProvider must be set");
+        throw new IllegalStateException("unused entity id provider must be set");
       if (this.threadFactory == null)
         throw new IllegalStateException("Thread factory must be set");
       if (this.tickFrequency.isNegative() || this.tickFrequency.isZero())
-        throw new IllegalStateException("Tick frequency must be positive");
+        throw new IllegalStateException("Tick frequency must be > 0");
       if (this.entityGetter == null)
         throw new IllegalStateException("Entity getter must be set");
       return new NametaggerPlatform(this.threadFactory, this.unusedEntityIdProvider, this.entityGetter, this.tickFrequency);
@@ -110,7 +112,7 @@ public class NametaggerPlatform
   }
 
   /**
-   * Creates a new builder for the NametaggerPlatform
+   * Creates a new builder for the platform
    * @return builder
    */
   public static Builder builder()
@@ -185,7 +187,7 @@ public class NametaggerPlatform
   }
 
   /**
-   * Checks if this platform has an entity getter function provided
+   * Checks if this platform has an entity getter function provided (other than the default no-op implementation)
    * @return has entity getter
    */
   public boolean hasEntityGetter()
@@ -227,7 +229,7 @@ public class NametaggerPlatform
   /**
    * Gets the entity object for the given entity ID, using the entity getter function provided in the builder
    * <br><br>
-   * Implementations are guaranteed to provide thread safe access to getting the entity, but not the entity object itself.
+   * Implementations are guaranteed to provide thread safe access to getting the entity, but not the entity object itself
    * @param entityId entity ID
    * @return entity object, or null if no entity was found
    */
@@ -339,7 +341,7 @@ public class NametaggerPlatform
   }
 
   /**
-   * Gets the viewer by their UUID.
+   * Gets the viewer by their UUID
    * @param uuid the UUID of the viewer to get
    * @return viewer
    */
@@ -349,7 +351,7 @@ public class NametaggerPlatform
   }
 
   /**
-   * Gets the viewer by their entity ID.
+   * Gets the viewer by their entity ID
    * @param entityId the entity ID of the viewer to get
    * @return viewer
    */
