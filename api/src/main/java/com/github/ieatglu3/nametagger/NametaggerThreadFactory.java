@@ -6,10 +6,12 @@ import java.util.function.IntFunction;
 /**
  * Simple thread factory that creates named daemon threads
  * <p>
- * Default thread name format is {@code 'nametagger-thread-{thread-number}'}, but you can provide a custom name supplier using {@link #named(IntFunction)}
+ * Default thread name format is {@link #DEFAULT_FORMAT}, but you can provide a custom name supplier using {@link #named(IntFunction)}
  */
 public final class NametaggerThreadFactory implements java.util.concurrent.ThreadFactory
 {
+
+  private static final String DEFAULT_FORMAT = "nametagger-thread-%d";
 
   /**
    * Creates a thread factory with the given name supplier
@@ -22,12 +24,12 @@ public final class NametaggerThreadFactory implements java.util.concurrent.Threa
   }
 
   /**
-   * Creates a thread factory with the default name supplier {@code 'nametagger-thread-{thread-number}'}
+   * Creates a thread factory with the default name supplier {@link #DEFAULT_FORMAT}
    * @return thread factory with the default name supplier
    */
   public static NametaggerThreadFactory create()
   {
-    return named(i -> "nametagger-thread-" + i);
+    return named(i -> String.format(DEFAULT_FORMAT, i));
   }
 
   private final AtomicInteger threadCount = new AtomicInteger(0);
