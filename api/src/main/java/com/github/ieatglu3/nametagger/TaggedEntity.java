@@ -8,7 +8,7 @@ import net.kyori.adventure.text.Component;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.BiConsumer;
 
 /**
@@ -19,7 +19,7 @@ public final class TaggedEntity
 
   final int parentEntityId;
 
-  private final AtomicReference<Vec> parentPosition;
+  private volatile Vec parentPosition;
 
   private final UnusedEntityIdProvider unusedEntityIdProvider;
 
@@ -31,10 +31,13 @@ public final class TaggedEntity
   volatile boolean sneaking = false;
   volatile boolean invisible = false;
 
+  private static final AtomicReferenceFieldUpdater<TaggedEntity, Vec> PARENT_POSITION =
+    AtomicReferenceFieldUpdater.newUpdater(TaggedEntity.class, Vec.class, "parentPosition");
+
   TaggedEntity(int parentEntityId, Vec parentPosition, UnusedEntityIdProvider unusedEntityIdProvider, ClientVersion clientVersion)
   {
     this.parentEntityId = parentEntityId;
-    this.parentPosition = new AtomicReference<>(parentPosition);
+    this.parentPosition = parentPosition;
     this.unusedEntityIdProvider = unusedEntityIdProvider;
     this.clientVersion = clientVersion;
   }
@@ -155,7 +158,7 @@ public final class TaggedEntity
    */
   public Vec parentPosition()
   {
-    return this.parentPosition.get();
+    return PARENT_POSITION.get(this);
   }
 
   /**
@@ -270,11 +273,11 @@ public final class TaggedEntity
     switch (positionUpdateKind)
     {
       case Relative:
-        this.parentPosition.updateAndGet(prev -> prev.add(x, y, z));
+        PARENT_POSITION.getAndUpdate(this, old -> old.add(x, y, z));
         break;
       case Absolute:
       case AbsoluteLegacy:
-        this.parentPosition.set(Vec.of(x, y, z));
+        PARENT_POSITION.set(this, Vec.of(x, y, z));
         break;
     }
 

@@ -37,8 +37,8 @@ public final class Viewer
   volatile Component nametagPrefix = Component.empty();
   volatile Component nametagSuffix = Component.empty();
 
-  volatile boolean pendingMainNametagUpdate = false;
-  private static final VarHandle PENDING_MAIN_NAMETAG_UPDATE;
+  volatile boolean pendingRealNametagUpdate = false;
+  private static final VarHandle PENDING_REAL_NAMETAG_UPDATE;
 
   final String psPacketTeamName = UUID.randomUUID()
     .toString()
@@ -48,7 +48,7 @@ public final class Viewer
   static {
     try
     {
-      PENDING_MAIN_NAMETAG_UPDATE = MethodHandles.lookup().findVarHandle(Viewer.class, "pendingMainNametagUpdate", boolean.class);
+      PENDING_REAL_NAMETAG_UPDATE = MethodHandles.lookup().findVarHandle(Viewer.class, "pendingRealNametagUpdate", boolean.class);
     }
     catch (ReflectiveOperationException e) {
       throw new ExceptionInInitializerError(e);
@@ -69,27 +69,45 @@ public final class Viewer
   }
 
   /**
-   * Updates the main nametag for this viewer (player name), the update is queued for the next tick
+   * Updates the real nametag for this viewer, the update is queued for the next tick
    * @param prefix new prefix, or null to set the prefix to empty
    * @param suffix new suffix, or null to set the suffix to empty
    */
-  public void updateMainNametag(Component prefix, Component suffix)
+  public void updateRealNametag(Component prefix, Component suffix)
   {
     this.nametagPrefix = prefix;
     this.nametagSuffix = suffix;
-    if (!PENDING_MAIN_NAMETAG_UPDATE.compareAndSet(this, false, true))
+    if (!PENDING_REAL_NAMETAG_UPDATE.compareAndSet(this, false, true))
       return;
     this.taskExecutor.submit((platform, viewer) -> {
       PrefixSuffixUpdater.update(platform, viewer);
-      PENDING_MAIN_NAMETAG_UPDATE.set(viewer, false);
+      PENDING_REAL_NAMETAG_UPDATE.set(viewer, false);
     });
   }
 
   /**
-   * Gets the main nametag suffix for this viewer
-   * @return main nametag suffix for this viewer, or null if none
+   * Updates the real nametag prefix for this viewer, the update is queued for the next tick
+   * @param prefix prefix
    */
-  public Component mainNametagPrefix()
+  public void updateRealNametagPrefix(Component prefix)
+  {
+    this.updateRealNametag(prefix, this.nametagSuffix);
+  }
+
+  /**
+   * Updates the real nametag suffix for this viewer, the update is queued for the next tick
+   * @param suffix suffix
+   */
+  public void updateRealNametagSuffix(Component suffix)
+  {
+    this.updateRealNametag(this.nametagPrefix, suffix);
+  }
+
+  /**
+   * Gets the real nametag suffix for this viewer
+   * @return real nametag suffix for this viewer, or null if none
+   */
+  public Component realNametagPrefix()
   {
     return this.nametagPrefix;
   }
@@ -98,7 +116,7 @@ public final class Viewer
    * Gets the main nametag suffix for this viewer
    * @return main nametag suffix for this viewer, or null if none
    */
-  public Component mainNametagSuffix()
+  public Component realNametagSuffix()
   {
     return this.nametagSuffix;
   }
