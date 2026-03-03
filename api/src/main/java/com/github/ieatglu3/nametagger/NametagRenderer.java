@@ -2,7 +2,7 @@ package com.github.ieatglu3.nametagger;
 
 /**
  * Responsible for rendering the tags of an entity for a viewer
- * All rendering methods are called on the platform thread executor
+ * All rendering methods are called on the platform thread
  */
 public abstract class NametagRenderer
 {

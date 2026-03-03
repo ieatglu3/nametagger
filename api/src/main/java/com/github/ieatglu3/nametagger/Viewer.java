@@ -399,7 +399,7 @@ public final class Viewer
   // only call from platform thread
   void close(NametaggerPlatform platform, boolean forcibly)
   {
-    if (this.closed)
+    if (this.closed) // todo; should i log something here
       return;
     this.closed = true;
     this.taskExecutor.executeAll(platform, this);
