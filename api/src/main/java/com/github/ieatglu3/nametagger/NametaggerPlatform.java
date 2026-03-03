@@ -151,6 +151,7 @@ public class NametaggerPlatform
 
   private final ConcurrentHashMap<UUID, Viewer> viewers = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<Integer, Viewer> entityIdToViewer = new ConcurrentHashMap<>();
+  final LinkedHashMap<UUID, Viewer> platformThreadViewers = new LinkedHashMap<>();
 
   private final ReentrantReadWriteLock stopLock = new ReentrantReadWriteLock();
 
@@ -317,7 +318,7 @@ public class NametaggerPlatform
         this.packetListener = null;
       }
 
-      for (final UUID uuid : new ArrayList<>(this.viewers.keySet()))
+      for (final UUID uuid : new ArrayList<>(this.platformThreadViewers.keySet()))
         this.disconnectViewer(uuid, true);
 
       this.taskExecutor.executeAll(this);
@@ -396,7 +397,7 @@ public class NametaggerPlatform
   private void tick()
   {
     this.taskExecutor.executeAll(this);
-    for (final var player : this.viewers.values())
+    for (final var player : this.platformThreadViewers.values())
       player.tick(this);
   }
 
@@ -420,8 +421,16 @@ public class NametaggerPlatform
         this.executeNextTick(platform -> oldViewer.close(platform, true));
         this.entityIdToViewer.remove(oldViewer.entityId);
       }
+
       this.entityIdToViewer.put(viewer.entityId, viewer);
       this.internalEventBus.onViewerJoin(this, viewer);
+
+      viewer.join();
+
+      this.executeNextTick(platform -> {
+        if (!viewer.isClosed())
+          platform.platformThreadViewers.put(uuid, viewer);
+      });
     }
     finally {
       stopLock.unlock();
@@ -451,6 +460,7 @@ public class NametaggerPlatform
         {
           viewer.close(platform, forcibly);
           platform.internalEventBus.onViewerRemove(platform, new RemovedViewer(uuid, viewer.entityId));
+          platform.platformThreadViewers.remove(uuid);
         }
         future.complete(viewer);
       });

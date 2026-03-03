@@ -3,7 +3,10 @@ package com.github.ieatglu3.nametagger;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.protocol.player.User;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
+import net.kyori.adventure.text.Component;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -19,18 +22,38 @@ public final class Viewer
 
   private static final Logger LOGGER = Logger.getLogger(Viewer.class.getName());
 
-  private final CopyOnWriteArrayList<NametagRenderer> renderers = new CopyOnWriteArrayList<>();
-
   private final ViewMap entities = new ViewMap();
   private final ConcurrentHashMap<Integer, Integer> tagEntities = new ConcurrentHashMap<>();
+  private final CopyOnWriteArrayList<NametagRenderer> renderers = new CopyOnWriteArrayList<>();
+  private final ConcurrentBiTaskExecutor<NametaggerPlatform, Viewer> taskExecutor = new ConcurrentBiTaskExecutor<>();
 
   final User user;
   final int entityId;
-  private final ConcurrentBiTaskExecutor<NametaggerPlatform, Viewer> taskExecutor = new ConcurrentBiTaskExecutor<>();
 
   private final UnusedEntityIdProvider unusedEntityIdProvider;
 
   volatile boolean closed = false;
+
+  volatile Component nametagPrefix = Component.empty();
+  volatile Component nametagSuffix = Component.empty();
+
+  volatile boolean pendingMainNametagUpdate = false;
+  private static final VarHandle PENDING_MAIN_NAMETAG_UPDATE;
+
+  final String psPacketTeamName = UUID.randomUUID()
+    .toString()
+    .replace("-", "")
+    .substring(0, 16); // this format should be fine, don't need to track it or anything and as long as its unique
+
+  static {
+    try
+    {
+      PENDING_MAIN_NAMETAG_UPDATE = MethodHandles.lookup().findVarHandle(Viewer.class, "pendingMainNametagUpdate", boolean.class);
+    }
+    catch (ReflectiveOperationException e) {
+      throw new ExceptionInInitializerError(e);
+    }
+  }
 
   Viewer(User user, int entityId, UnusedEntityIdProvider unusedEntityIdProvider)
   {
@@ -38,6 +61,46 @@ public final class Viewer
     this.user = user;
     this.entityId = entityId;
     this.unusedEntityIdProvider = unusedEntityIdProvider;
+  }
+
+  void join()
+  {
+    this.taskExecutor.submit(PrefixSuffixUpdater::add);
+  }
+
+  /**
+   * Updates the main nametag for this viewer (player name), the update is queued for the next tick
+   * @param prefix new prefix, or null to set the prefix to empty
+   * @param suffix new suffix, or null to set the suffix to empty
+   */
+  public void updateMainNametag(Component prefix, Component suffix)
+  {
+    this.nametagPrefix = prefix;
+    this.nametagSuffix = suffix;
+    if (!PENDING_MAIN_NAMETAG_UPDATE.compareAndSet(this, false, true))
+      return;
+    this.taskExecutor.submit((platform, viewer) -> {
+      PrefixSuffixUpdater.update(platform, viewer);
+      PENDING_MAIN_NAMETAG_UPDATE.set(viewer, false);
+    });
+  }
+
+  /**
+   * Gets the main nametag suffix for this viewer
+   * @return main nametag suffix for this viewer, or null if none
+   */
+  public Component mainNametagPrefix()
+  {
+    return this.nametagPrefix;
+  }
+
+  /**
+   * Gets the main nametag suffix for this viewer
+   * @return main nametag suffix for this viewer, or null if none
+   */
+  public Component mainNametagSuffix()
+  {
+    return this.nametagSuffix;
   }
 
   /**
@@ -412,6 +475,7 @@ public final class Viewer
       this.entities.clear();
       this.tagEntities.clear();
     }
+    PrefixSuffixUpdater.remove(platform, this);
   }
 
   void detachAllRenderers(NametaggerPlatform platform)
