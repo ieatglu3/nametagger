@@ -124,8 +124,8 @@ public final class TaggedEntity
    */
   public ComponentTag createComponentTag(Component component, Vec offset)
   {
-    final var tagEntity = new TagEntity(this.unusedEntityIdProvider.next(), this.nextUuid(), this.clientVersion);
-    final var tag = new ComponentTag(tagEntity, component).setOffset(offset);
+    final var tagEntity = new TagEntity(this.unusedEntityIdProvider.next(), UUID.randomUUID(), this.clientVersion);
+    final var tag = new ComponentTag(tagEntity, component, this.nextUuid(), offset);
     this.tags.add(tag);
     this.tagsByUuid.put(tag.uuid(), tag);
     return tag;

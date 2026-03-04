@@ -40,18 +40,22 @@ public final class ComponentTag
   volatile boolean hideWhenInvisible = true;
   volatile boolean hideWhenSneaking = true;
 
-  volatile Vec offset = Vec.ZERO;
+  volatile Vec offset;
   volatile Component component;
   volatile boolean markedForRemoval = false;
 
-  final UUID uuid = UUID.randomUUID();
+  final UUID uuid;
 
-  ComponentTag(TagEntity entity, Component name)
+  ComponentTag(TagEntity entity, Component name, UUID uuid, Vec offset)
   {
     Objects.requireNonNull(entity, "entity cannot be null");
     Objects.requireNonNull(name, "name cannot be null");
+    Objects.requireNonNull(uuid, "uuid cannot be null");
+    Objects.requireNonNull(offset, "offset cannot be null");
     this.entity = entity;
     this.component = name;
+    this.uuid = uuid;
+    this.offset = offset;
   }
 
   void updatePosition(Viewer viewer, double x, double y, double z, PositionUpdateKind positionUpdateKind)
