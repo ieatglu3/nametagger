@@ -137,13 +137,21 @@ public class NametaggerPlatform
     public void onViewerJoin(NametaggerPlatform platform, Viewer viewer)
     {
       for (final var listener : this.viewerJoinListeners)
-        listener.accept(platform, viewer);
+        try {
+          listener.accept(platform, viewer);
+        } catch (Exception e) {
+          LOGGER.log(java.util.logging.Level.SEVERE, "Exception in viewer join listener", e);
+        }
     }
 
     public void onViewerRemove(NametaggerPlatform platform, RemovedViewer viewer)
     {
       for (final var listener : this.viewerRemoveListeners)
-        listener.accept(platform, viewer);
+        try {
+          listener.accept(platform, viewer);
+        } catch (Exception e) {
+          LOGGER.log(java.util.logging.Level.SEVERE, "Exception in viewer remove listener", e);
+        }
     }
   }
 
