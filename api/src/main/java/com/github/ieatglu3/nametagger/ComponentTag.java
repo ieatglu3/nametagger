@@ -22,11 +22,17 @@ public final class ComponentTag
 
   private static final VarHandle NEEDS_UPDATE;
   private static final VarHandle SHOWN;
+  private static final VarHandle OFFSET;
+  private static final VarHandle COMPONENT;
+  private static final VarHandle MARKED_FOR_REMOVAL;
   static {
     try {
       final MethodHandles.Lookup lookup = MethodHandles.lookup();
       NEEDS_UPDATE = lookup.findVarHandle(ComponentTag.class, "needsUpdate", boolean.class);
       SHOWN = lookup.findVarHandle(ComponentTag.class, "shown", boolean.class);
+      OFFSET = lookup.findVarHandle(ComponentTag.class, "offset", Vec.class);
+      COMPONENT = lookup.findVarHandle(ComponentTag.class, "component", Component.class);
+      MARKED_FOR_REMOVAL = lookup.findVarHandle(ComponentTag.class, "markedForRemoval", boolean.class);
     } catch (ReflectiveOperationException e) {
       throw new ExceptionInInitializerError(e);
     }
@@ -42,7 +48,7 @@ public final class ComponentTag
 
   volatile Vec offset;
   volatile Component component;
-  volatile boolean markedForRemoval = false;
+  private volatile boolean markedForRemoval = false;
 
   final UUID uuid;
 
@@ -58,9 +64,20 @@ public final class ComponentTag
     this.offset = offset;
   }
 
+  boolean isMarkedForRemoval()
+  {
+    return (boolean) MARKED_FOR_REMOVAL.getAcquire(this);
+  }
+
+  void markForRemoval()
+  {
+    MARKED_FOR_REMOVAL.setRelease(this, true);
+  }
+
   void updatePosition(Viewer viewer, double x, double y, double z, PositionUpdateKind positionUpdateKind)
   {
     final var entityId = this.entityId();
+    final var offset = (Vec) OFFSET.getAcquire(this);
     PacketWrapper<?> packet;
     switch (positionUpdateKind)
     {
@@ -70,14 +87,14 @@ public final class ComponentTag
       case Absolute:
         packet = new WrapperPlayServerEntityPositionSync(
           entityId,
-          new EntityPositionData(this.offset.add(x, y, z).toPacketEventsVector3d(), Vector3d.zero(), 0, 0),
+          new EntityPositionData(offset.add(x, y, z).toPacketEventsVector3d(), Vector3d.zero(), 0, 0),
           true
         );
         break;
       case AbsoluteLegacy:
         packet = new WrapperPlayServerEntityTeleport(
           entityId,
-          new Location(this.offset.add(x, y, z).toPacketEventsVector3d(), 0, 0),
+          new Location(offset.add(x, y, z).toPacketEventsVector3d(), 0, 0),
           true
         );
         break;
@@ -89,7 +106,7 @@ public final class ComponentTag
 
   void tick(Viewer viewer)
   {
-    if (NEEDS_UPDATE.compareAndSet(this, true, false))
+    if (NEEDS_UPDATE.weakCompareAndSet(this, true, false))
     {
       final var nameUpdatePacket = this.entity.namePacket(this.component);
       viewer.sendPacket(nameUpdatePacket);
@@ -161,7 +178,7 @@ public final class ComponentTag
   public ComponentTag setComponent(Component name)
   {
     Objects.requireNonNull(name, "name cannot be null");
-    this.component = name;
+    COMPONENT.setRelease(this, name);
     return this;
   }
 
@@ -175,7 +192,7 @@ public final class ComponentTag
   public ComponentTag setOffset(Vec offset)
   {
     Objects.requireNonNull(offset, "offset cannot be null");
-    this.offset = offset.subtract(0, this.entity.entityHeight(), 0);
+    OFFSET.setRelease(this, offset.subtract(0, this.entity.entityHeight(), 0));
     return this;
   }
 

@@ -149,7 +149,7 @@ public final class TaggedEntity
   {
     final var tag = this.getOrNull(index);
     if (tag != null)
-      tag.markedForRemoval = true;
+      tag.markForRemoval();
   }
 
   /**
@@ -292,7 +292,7 @@ public final class TaggedEntity
     final var removeQueue = new ArrayList<ComponentTag>();
     for (final var tag : this.tags)
     {
-      if (tag.markedForRemoval)
+      if (tag.isMarkedForRemoval())
         removeQueue.add(tag);
       else
         if (tag.isVisible())
@@ -312,6 +312,6 @@ public final class TaggedEntity
   void removeAll()
   {
     for (final var tag : this.tags)
-      tag.markedForRemoval = true;
+      tag.markForRemoval();
   }
 }
