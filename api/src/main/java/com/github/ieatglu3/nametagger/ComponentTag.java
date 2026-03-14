@@ -77,7 +77,6 @@ public final class ComponentTag
   void updatePosition(Viewer viewer, double x, double y, double z, PositionUpdateKind positionUpdateKind)
   {
     final var entityId = this.entityId();
-    final var offset = (Vec) OFFSET.getAcquire(this);
     PacketWrapper<?> packet;
     switch (positionUpdateKind)
     {
@@ -85,19 +84,25 @@ public final class ComponentTag
         packet = new WrapperPlayServerEntityRelativeMove(entityId, x, y, z, true);
         break;
       case Absolute:
+      {
+        final Vec offset = (Vec) OFFSET.getAcquire(this);
         packet = new WrapperPlayServerEntityPositionSync(
           entityId,
           new EntityPositionData(offset.add(x, y, z).toPacketEventsVector3d(), Vector3d.zero(), 0, 0),
           true
         );
         break;
+      }
       case AbsoluteLegacy:
+      {
+        final Vec offset = (Vec) OFFSET.getAcquire(this);
         packet = new WrapperPlayServerEntityTeleport(
           entityId,
           new Location(offset.add(x, y, z).toPacketEventsVector3d(), 0, 0),
           true
         );
         break;
+      }
       default:
         throw new IllegalArgumentException();
     }
