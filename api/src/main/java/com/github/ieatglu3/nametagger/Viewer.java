@@ -9,7 +9,6 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -24,7 +23,7 @@ public final class Viewer
 
   private final ViewMap entities = new ViewMap();
   private final ConcurrentHashMap<Integer, Integer> tagEntities = new ConcurrentHashMap<>();
-  private final CopyOnWriteArrayList<NametagRenderer> renderers = new CopyOnWriteArrayList<>();
+  private final ArrayList<NametagRenderer> renderers = new ArrayList<>();
   private final ConcurrentBiTaskExecutor<NametaggerPlatform, Viewer> taskExecutor = new ConcurrentBiTaskExecutor<>();
 
   final User user;
@@ -261,9 +260,9 @@ public final class Viewer
    * Only use this if you know what you're doing!
    * @return backing list of renderers for this viewer
    */
-  public CopyOnWriteArrayList<NametagRenderer> renderers()
+  public List<NametagRenderer> renderers()
   {
-    return this.renderers;
+    return Collections.unmodifiableList(this.renderers);
   }
 
   /**

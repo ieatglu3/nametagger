@@ -6,6 +6,7 @@ import com.github.ieatglu3.nametagger.platformutil.entity.DelegatedEntityIdProvi
 import com.github.ieatglu3.nametagger.platformutil.entity.EntityIdProvider;
 
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -51,7 +52,7 @@ public final class NametaggerPlatformUtil
     if (platform == null)
       throw new IllegalStateException("Nametagger platform is not initialized");
     if (platform.isShutOrShuttingDown())
-      Logger.getLogger(NametaggerPlatform.class.getName()).warning("Nametagger platform is already shutting down or was shut down, this should not happen");
+      LOGGER.warning("Nametagger platform is already shutting down or was shut down, this should not happen");
     else
       platform.shutdown();
   }
@@ -73,7 +74,7 @@ public final class NametaggerPlatformUtil
     }
     catch (Exception e) {
       provider = EntityIdProvider.Naive.getUnchecked(FALLBACK_ENTITY_ID_START);
-      LOGGER.warning("Failed to find a entity id provider implementation, using fallback NaiveEntityIdProvider: " + e.getMessage());
+      LOGGER.log(Level.WARNING, "Failed to find an entity id provider implementation, using fallback NaiveEntityIdProvider: ", e);
     }
     LOGGER.info("Using " + provider.name + " as the platform entity ID provider");
     return platformEntityIdProvider = provider;
