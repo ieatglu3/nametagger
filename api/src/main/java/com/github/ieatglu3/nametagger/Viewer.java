@@ -410,25 +410,16 @@ public final class Viewer
 
   void addEntity(int entityId, Vec entityPosition)
   {
+    if (this.entities.containsKey(entityId))
+      return;
     final var taggedEntity = new TaggedEntity(
       entityId,
       entityPosition,
       this.unusedEntityIdProvider,
       this.clientVersion()
     );
-    final var existingTaggedEntity = this.entities.put(entityId, taggedEntity);
-    this.taskExecutor.submit((platform, viewer) ->
-    {
-      if (existingTaggedEntity != null) // should never happen
-      {
-        LOGGER.warning(String.format("Attempted to add entity '%d' to viewer '%s', but the entity is already tagged. Existing tags will be replaced.",
-          entityId,
-          this.name()
-        ));
-        existingTaggedEntity.hideNow(viewer);
-      }
-      viewer.initTagListNow(platform, entityId);
-    });
+    this.entities.put(entityId, taggedEntity);
+    this.taskExecutor.submit((platform, viewer) -> viewer.initTagListNow(platform, entityId));
   }
 
   void initTagListNow(NametaggerPlatform platform, int entityId)
