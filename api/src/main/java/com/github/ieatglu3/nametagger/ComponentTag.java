@@ -85,7 +85,7 @@ public final class ComponentTag
         break;
       case Absolute:
       {
-        final Vec offset = (Vec) OFFSET.getAcquire(this);
+        final Vec offset = (Vec) OFFSET.get(this);
         packet = new WrapperPlayServerEntityPositionSync(
           entityId,
           new EntityPositionData(offset.add(x, y, z).toPacketEventsVector3d(), Vector3d.zero(), 0, 0),
@@ -95,7 +95,7 @@ public final class ComponentTag
       }
       case AbsoluteLegacy:
       {
-        final Vec offset = (Vec) OFFSET.getAcquire(this);
+        final Vec offset = (Vec) OFFSET.get(this);
         packet = new WrapperPlayServerEntityTeleport(
           entityId,
           new Location(offset.add(x, y, z).toPacketEventsVector3d(), 0, 0),
