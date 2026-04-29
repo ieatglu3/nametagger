@@ -3,8 +3,6 @@ plugins {
   id("com.gradleup.shadow") version "9.2.2"
 }
 
-var jarName = "nametagger-spigot"
-
 group = "com.github.ieatglu3"
 version = "1.0.0"
 
@@ -15,8 +13,8 @@ repositories {
 }
 
 dependencies {
-  implementation(project(":api"))
-  implementation(project(":platform-util"))
+  implementation(project(":nametagger-api"))
+  implementation(project(":nametagger-platform-util"))
   implementation("com.github.ieatglu3:bukec:v1.1.0")
   compileOnly("org.spigotmc:spigot-api:1.8.8-R0.1-SNAPSHOT") {
     exclude(group = "net.md-5", module = "bungeecord-chat")
@@ -38,13 +36,13 @@ tasks {
   }
 
   shadowJar {
-    archiveBaseName = jarName
+    archiveBaseName = project.name
     version = project.version
     archiveClassifier = "shaded"
   }
 
   jar {
-    archiveBaseName = jarName
+    archiveBaseName = project.name
     version = project.version
     dependsOn(shadowJar)
   }
