@@ -2,12 +2,8 @@ plugins {
   id("java")
 }
 
-var projectGroup = "com.github.ieatglu3.nametagger"
-var projectVersion = "1.0.0"
-var projectArtifactId = "nametagger-platform-util"
-
-group = projectGroup
-version = projectVersion
+group = "com.github.ieatglu3"
+version = "1.0.0"
 
 repositories {
   mavenCentral()
@@ -32,7 +28,7 @@ tasks {
   }
 
   jar {
-    archiveBaseName = projectArtifactId
+    archiveBaseName = project.name
     version = project.version
   }
 
