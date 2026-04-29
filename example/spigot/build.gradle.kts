@@ -13,8 +13,8 @@ repositories {
 }
 
 dependencies {
-  compileOnly(project(":api"))
-  compileOnly(project(":platform-util"))
+  compileOnly(project(":nametagger-api"))
+  compileOnly(project(":nametagger-platform-util"))
   compileOnly("net.kyori:adventure-api:4.26.1")
   compileOnly("org.spigotmc:spigot-api:1.8.8-R0.1-SNAPSHOT") {
     exclude(group = "net.md-5", module = "bungeecord-chat")
