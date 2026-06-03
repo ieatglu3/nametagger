@@ -1,9 +1,9 @@
 package com.github.ieatglu3.nametagger;
 
+import com.github.ieatglu3.nametagger.simple.VanillaNametagRenderer;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.protocol.player.User;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
-import net.kyori.adventure.text.Component;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -32,27 +32,12 @@ public final class Viewer
   private final UnusedEntityIdProvider unusedEntityIdProvider;
 
   volatile boolean closed = false;
-
-  volatile Component nametagPrefix = Component.empty();
-  volatile Component nametagSuffix = Component.empty();
-
-  volatile boolean pendingRealNametagUpdate = false;
-  private static final VarHandle PENDING_REAL_NAMETAG_UPDATE;
+  volatile VanillaNametagRenderer vanillaNametagRenderer = null;
 
   final String psPacketTeamName = UUID.randomUUID()
     .toString()
     .replace("-", "")
     .substring(0, 16); // this format should be fine, don't need to track it or anything and as long as its unique
-
-  static {
-    try
-    {
-      PENDING_REAL_NAMETAG_UPDATE = MethodHandles.lookup().findVarHandle(Viewer.class, "pendingRealNametagUpdate", boolean.class);
-    }
-    catch (ReflectiveOperationException e) {
-      throw new ExceptionInInitializerError(e);
-    }
-  }
 
   Viewer(User user, int entityId, UnusedEntityIdProvider unusedEntityIdProvider)
   {
@@ -64,60 +49,25 @@ public final class Viewer
 
   void join()
   {
-    this.taskExecutor.submit(PrefixSuffixUpdater::add);
+    this.taskExecutor.submit(VanillaNametagUpdater::add);
   }
 
   /**
-   * Updates the real nametag for this viewer, the update is queued for the next tick
-   * @param prefix new prefix, or null to set the prefix to empty
-   * @param suffix new suffix, or null to set the suffix to empty
+   * Sets the vanilla nametag renderer for this viewer
+   * @param renderer the vanilla nametag renderer for this viewer
    */
-  public void updateRealNametag(Component prefix, Component suffix)
+  public void setVanillaNametagRenderer(VanillaNametagRenderer renderer)
   {
-    this.nametagPrefix = prefix;
-    this.nametagSuffix = suffix;
-    if (!PENDING_REAL_NAMETAG_UPDATE.compareAndSet(this, false, true))
-      return;
-    this.taskExecutor.submit((platform, viewer) -> {
-      PrefixSuffixUpdater.update(platform, viewer);
-      PENDING_REAL_NAMETAG_UPDATE.set(viewer, false);
-    });
+    this.vanillaNametagRenderer = renderer;
   }
 
   /**
-   * Updates the real nametag prefix for this viewer, the update is queued for the next tick
-   * @param prefix prefix
+   * Gets the vanilla nametag renderer for this viewer, or null if it is not set
+   * @return the vanilla nametag renderer for this viewer
    */
-  public void updateRealNametagPrefix(Component prefix)
+  public VanillaNametagRenderer vanillaNametagRenderer()
   {
-    this.updateRealNametag(prefix, this.nametagSuffix);
-  }
-
-  /**
-   * Updates the real nametag suffix for this viewer, the update is queued for the next tick
-   * @param suffix suffix
-   */
-  public void updateRealNametagSuffix(Component suffix)
-  {
-    this.updateRealNametag(this.nametagPrefix, suffix);
-  }
-
-  /**
-   * Gets the real nametag suffix for this viewer
-   * @return real nametag suffix for this viewer, or null if none
-   */
-  public Component realNametagPrefix()
-  {
-    return this.nametagPrefix;
-  }
-
-  /**
-   * Gets the main nametag suffix for this viewer
-   * @return main nametag suffix for this viewer, or null if none
-   */
-  public Component realNametagSuffix()
-  {
-    return this.nametagSuffix;
+    return this.vanillaNametagRenderer;
   }
 
   /**
@@ -465,6 +415,7 @@ public final class Viewer
     }
     for (final var taggedEntity : this.entities.values())
       taggedEntity.tick(this);
+    VanillaNametagUpdater.update(platform, this);
   }
 
   // only call from platform thread
@@ -483,7 +434,7 @@ public final class Viewer
       this.entities.clear();
       this.tagEntities.clear();
     }
-    PrefixSuffixUpdater.remove(platform, this);
+    VanillaNametagUpdater.remove(platform, this);
   }
 
   void detachAllRenderers(NametaggerPlatform platform)
