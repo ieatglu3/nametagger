@@ -30,4 +30,15 @@ public final class VanillaNametag
   {
     return new VanillaNametag(color, prefix, suffix);
   }
+
+  /**
+   * Creates a new vanilla nametag with the given prefix and suffix, and a default color of white.
+   * @param prefix prefix
+   * @param suffix suffix
+   * @return a new vanilla nametag with the given prefix and suffix, and a default color of white
+   */
+  public static VanillaNametag of(Component prefix, Component suffix)
+  {
+    return new VanillaNametag(NamedTextColor.WHITE, prefix, suffix);
+  }
 }
